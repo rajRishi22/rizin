@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 #include "rz_util.h"
+#include <rz_types.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <limits.h>
+
 
 #define NELEM(N, ELEMPER) ((N + (ELEMPER)-1) / (ELEMPER))
 #define BV_ELEM_SIZE      8U
+#define SIZE_OF_UNSIGNED_LONG (sizeof(unsigned long))
+
 
 // optimization for reversing 8 bits which uses 32 bits
 // https://graphics.stanford.edu/~seander/bithacks.html#ReverseByteWith32Bits
@@ -215,22 +218,23 @@ RZ_API ut32 rz_bv_copy_nbits(RZ_NONNULL const RzBitVector *src, ut32 src_start_p
     rz_return_val_if_fail(src && dst, 0);
 
     // Determine the chunk size (word size) dynamically
-    const ut32 chunk_size = sizeof(unsigned long) * CHAR_BIT; // Word size in bits
+    const ut32 chunk_size = SIZE_OF_UNSIGNED_LONG * CHAR_BIT; // Word size in bits
     ut32 max_nbit = RZ_MIN((src->len - src_start_pos), (dst->len - dst_start_pos));
 
     if (max_nbit < nbit) {
         return 0;
     }
 
-    ut32 bits_copied = 0;
+    ut32 nbit_original = nbit;
 
     // Handle unaligned prefix
-    while ((src_start_pos % chunk_size != 0 || dst_start_pos % chunk_size != 0) && nbit > 0) {
+	if(src_start_pos % chunk_size != 0 || dst_start_pos % chunk_size != 0){
+    while (nbit > 0) {
         bool bit = rz_bv_get(src, src_start_pos++);
         rz_bv_set(dst, dst_start_pos++, bit);
         --nbit;
-        ++bits_copied;
     }
+	}
 
     // Process aligned chunks
     while (nbit >= chunk_size) {
@@ -239,7 +243,7 @@ RZ_API ut32 rz_bv_copy_nbits(RZ_NONNULL const RzBitVector *src, ut32 src_start_p
         unsigned long dst_chunk = rz_bv_get_chunk(dst, dst_start_pos / chunk_size);
 
         // Create a mask for the bits to copy
-        unsigned long mask = (1UL << chunk_size) - 1;
+		unsigned long mask = UINT32_MAX;
         if (nbit < chunk_size) {
             mask = (1UL << nbit) - 1;
         }
@@ -251,7 +255,6 @@ RZ_API ut32 rz_bv_copy_nbits(RZ_NONNULL const RzBitVector *src, ut32 src_start_p
         src_start_pos += chunk_size;
         dst_start_pos += chunk_size;
         nbit -= chunk_size;
-        bits_copied += chunk_size;
     }
 
     // Handle remaining unaligned suffix bits
@@ -259,10 +262,9 @@ RZ_API ut32 rz_bv_copy_nbits(RZ_NONNULL const RzBitVector *src, ut32 src_start_p
         bool bit = rz_bv_get(src, src_start_pos++);
         rz_bv_set(dst, dst_start_pos++, bit);
         --nbit;
-        ++bits_copied;
     }
 
-    return bits_copied;
+    return nbit_original;
 }
 
 
@@ -1525,7 +1527,7 @@ RZ_API bool rz_bv_set_range(RZ_NONNULL RzBitVector *bv, ut32 pos_start, ut32 pos
     }
 
     // Determine the chunk size dynamically
-    const ut32 chunk_size = sizeof(unsigned long) * CHAR_BIT;
+    const ut32 chunk_size = SIZE_OF_UNSIGNED_LONG * CHAR_BIT;
 
     // Handle unaligned prefix bits
     while (pos_start < pos_end && pos_start % chunk_size != 0) {
