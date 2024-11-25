@@ -4,6 +4,7 @@
 #include "rz_util.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 
 #define NELEM(N, ELEMPER) ((N + (ELEMPER)-1) / (ELEMPER))
 #define BV_ELEM_SIZE      8U
@@ -209,7 +210,6 @@ RZ_API ut32 rz_bv_copy(RZ_NONNULL const RzBitVector *src, RZ_NONNULL RzBitVector
  * \param nbit ut32, control the size of copy (in bits)
  * \return copied_size ut32, Actual copied size
  */
-#include <limits.h> // For CHAR_BIT
 
 RZ_API ut32 rz_bv_copy_nbits(RZ_NONNULL const RzBitVector *src, ut32 src_start_pos, RZ_NONNULL RzBitVector *dst, ut32 dst_start_pos, ut32 nbit) {
     rz_return_val_if_fail(src && dst, 0);
