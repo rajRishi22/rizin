@@ -209,25 +209,63 @@ RZ_API ut32 rz_bv_copy(RZ_NONNULL const RzBitVector *src, RZ_NONNULL RzBitVector
  * \param nbit ut32, control the size of copy (in bits)
  * \return copied_size ut32, Actual copied size
  */
+#include <limits.h> // For CHAR_BIT
+
 RZ_API ut32 rz_bv_copy_nbits(RZ_NONNULL const RzBitVector *src, ut32 src_start_pos, RZ_NONNULL RzBitVector *dst, ut32 dst_start_pos, ut32 nbit) {
-	rz_return_val_if_fail(src && dst, 0);
+    rz_return_val_if_fail(src && dst, 0);
 
-	ut32 max_nbit = RZ_MIN((src->len - src_start_pos),
-		(dst->len - dst_start_pos));
+    // Determine the chunk size (word size) dynamically
+    const ut32 chunk_size = sizeof(unsigned long) * CHAR_BIT; // Word size in bits
+    ut32 max_nbit = RZ_MIN((src->len - src_start_pos), (dst->len - dst_start_pos));
 
-	// prevent overflow
-	if (max_nbit < nbit) {
-		return 0;
-	}
+    if (max_nbit < nbit) {
+        return 0;
+    }
 
-	// normal case here
-	for (ut32 i = 0; i < nbit; ++i) {
-		bool c = rz_bv_get(src, src_start_pos + i);
-		rz_bv_set(dst, dst_start_pos + i, c);
-	}
+    ut32 bits_copied = 0;
 
-	return nbit;
+    // Handle unaligned prefix
+    while ((src_start_pos % chunk_size != 0 || dst_start_pos % chunk_size != 0) && nbit > 0) {
+        bool bit = rz_bv_get(src, src_start_pos++);
+        rz_bv_set(dst, dst_start_pos++, bit);
+        --nbit;
+        ++bits_copied;
+    }
+
+    // Process aligned chunks
+    while (nbit >= chunk_size) {
+        // Get chunks from the source and destination
+        unsigned long src_chunk = rz_bv_get_chunk(src, src_start_pos / chunk_size);
+        unsigned long dst_chunk = rz_bv_get_chunk(dst, dst_start_pos / chunk_size);
+
+        // Create a mask for the bits to copy
+        unsigned long mask = (1UL << chunk_size) - 1;
+        if (nbit < chunk_size) {
+            mask = (1UL << nbit) - 1;
+        }
+
+        // Merge chunks using the optimized approach
+        unsigned long result = dst_chunk ^ ((dst_chunk ^ src_chunk) & mask);
+        rz_bv_set_chunk(dst, dst_start_pos / chunk_size, result);
+
+        src_start_pos += chunk_size;
+        dst_start_pos += chunk_size;
+        nbit -= chunk_size;
+        bits_copied += chunk_size;
+    }
+
+    // Handle remaining unaligned suffix bits
+    while (nbit > 0) {
+        bool bit = rz_bv_get(src, src_start_pos++);
+        rz_bv_set(dst, dst_start_pos++, bit);
+        --nbit;
+        ++bits_copied;
+    }
+
+    return bits_copied;
 }
+
+
 
 /**
  * Return a new bitvector prepended with bv with n zero bits
