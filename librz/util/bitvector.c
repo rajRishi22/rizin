@@ -263,7 +263,6 @@ RZ_API ut32 rz_bv_copy_nbits(RZ_NONNULL const RzBitVector *src, ut32 src_start_p
         rz_bv_set(dst, dst_start_pos++, bit);
         --nbit;
     }
-
     return nbit_original;
 }
 
