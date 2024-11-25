@@ -1518,17 +1518,42 @@ RZ_API ut64 rz_bv_to_ut64(RZ_NONNULL const RzBitVector *x) {
  * \return return true if success, else return false
  */
 RZ_API bool rz_bv_set_range(RZ_NONNULL RzBitVector *bv, ut32 pos_start, ut32 pos_end, bool b) {
-	rz_return_val_if_fail(bv, false);
-	if (pos_start > bv->len - 1 || pos_end > bv->len - 1) {
-		return false;
-	}
+    rz_return_val_if_fail(bv, false);
 
-	for (ut32 i = pos_start; i <= pos_end; ++i) {
-		rz_bv_set(bv, i, b);
-	}
+    if (pos_start > bv->len - 1 || pos_end > bv->len - 1 || pos_start > pos_end) {
+        return false;
+    }
 
-	return true;
+    // Determine the chunk size dynamically
+    const ut32 chunk_size = sizeof(unsigned long) * CHAR_BIT;
+
+    // Handle unaligned prefix bits
+    while (pos_start < pos_end && pos_start % chunk_size != 0) {
+        rz_bv_set(bv, pos_start++, b);
+    }
+
+    // Process aligned chunks
+    if (pos_start < pos_end) {
+        ut32 chunk_start = pos_start / chunk_size;
+        ut32 chunk_end = pos_end / chunk_size;
+
+        unsigned long fill_value = b ? ~0UL : 0UL;
+
+        for (ut32 i = chunk_start; i < chunk_end; ++i) {
+            rz_bv_set_chunk(bv, i, fill_value);
+        }
+
+        pos_start = chunk_end * chunk_size;
+    }
+
+    // Handle remaining unaligned suffix bits
+    while (pos_start <= pos_end) {
+        rz_bv_set(bv, pos_start++, b);
+    }
+
+    return true;
 }
+
 
 /**
  * check if bitvector's bits are all set to bit 1
