@@ -9,6 +9,7 @@
 #define NELEM(N, ELEMPER) ((N + (ELEMPER)-1) / (ELEMPER))
 #define BV_ELEM_SIZE      8U
 #define RZ_BV_CHUNK_SIZE  (sizeof(unsigned long) * CHAR_BIT)
+#define SIZE_OF_UNSIGNED_LONG sizeof(unsigned long)
 
 // optimization for reversing 8 bits which uses 32 bits
 // https://graphics.stanford.edu/~seander/bithacks.html#ReverseByteWith32Bits
