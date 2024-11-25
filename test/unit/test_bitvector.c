@@ -1123,43 +1123,23 @@ bool test_rz_bv_copy_nbits(void) {
 	rz_bv_set(src, src->len - 1, true);
 	rz_bv_set(src, src->len - 3, true);
 
-	// Test 1: Copy part of src to a smaller destination
+	/// copy part of bv to a new one with the same size
 	RzBitVector *small = rz_bv_new(part_sz);
 	actual_copy = rz_bv_copy_nbits(src, 0, small, 0, part_sz);
-	mu_assert_eq(actual_copy, part_sz, "copy part_sz to small");
-	mu_assert_streq_free(rz_bv_as_string(small), "11111111", "copy nbits to small bv");
+	mu_assert_eq(actual_copy, part_sz, "copy part_sz to normal");
+	mu_assert_streq_free(rz_bv_as_string(small), "11111111", "copy nbits small bv");
 
-	// Test 2: Copy part of src to a destination of the same size
+	/// copy part of bv to a new one which has more spaces
 	RzBitVector *normal = rz_bv_new(size);
 	actual_copy = rz_bv_copy_nbits(src, 0, normal, 0, part_sz);
-	mu_assert_eq(actual_copy, part_sz, "copy part_sz to normal");
-	mu_assert_streq_free(rz_bv_as_string(normal), "00000000000011111111", "copy nbits to normal bv");
+	mu_assert_eq(actual_copy, part_sz, "copy part_sz bits to normal");
+	mu_assert_streq_free(rz_bv_as_string(normal), "00000000000011111111", "copy nbits normal length bv");
 
-	// Test 3: Copy src to a destination with offset
+	/// copy part of bv to the medium
 	RzBitVector *res = rz_bv_new(size);
 	actual_copy = rz_bv_copy_nbits(src, 0, res, 8, part_sz);
-	mu_assert_eq(actual_copy, part_sz, "copy part_sz to medium offset");
-	mu_assert_streq_free(rz_bv_as_string(res), "00001111111100000000", "copy nbits with offset");
-
-	// Test 4: Copy non-zero bits from src to dst
-	RzBitVector *a = rz_bv_new_from_ut64(32, 0x12345678);
-	RzBitVector *b = rz_bv_new_from_ut64(32, 0x1986);
-	actual_copy = rz_bv_copy_nbits(b, 0, a, a->len - 11, 11);
-	mu_assert_eq(actual_copy, 11, "copy non-zero 11 bits");
-	mu_assert_streq_free(rz_bv_as_hex_string(a, false), "0x30d45678", "non-zero bit copy");
-
-	// Test 5: Copy fails when nbit exceeds the range
-	RzBitVector *too_small = rz_bv_new(part_sz);
-	actual_copy = rz_bv_copy_nbits(src, 0, too_small, 0, part_sz + 2);
-	mu_assert_eq(actual_copy, 0, "copy overflow fails");
-	mu_assert_true(rz_bv_is_zero_vector(too_small), "copy nothing on overflow");
-
-	// Additional Test 6: Copy with unaligned start positions
-	RzBitVector *unaligned_src = rz_bv_new_from_ut64(64, 0xFFFFFFFFFFFFFFFF);
-	RzBitVector *unaligned_dst = rz_bv_new(64);
-	actual_copy = rz_bv_copy_nbits(unaligned_src, 3, unaligned_dst, 5, 20);
-	mu_assert_eq(actual_copy, 20, "unaligned copy works");
-	mu_assert_streq_free(rz_bv_as_string(unaligned_dst), "00000011111111111111110000000000", "unaligned copy result");
+	mu_assert_eq(actual_copy, part_sz, "copy part_sz bits to medium");
+	mu_assert_streq_free(rz_bv_as_string(res), "00001111111100000000", "copy nbits to medium");
 
 	/// copy non-zero, copy last 11 bits of `b` to the head of `a`
 	/// dst : a = 0001 0010 0011 ...
