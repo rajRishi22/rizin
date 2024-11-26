@@ -8,8 +8,8 @@
 
 #define NELEM(N, ELEMPER) ((N + (ELEMPER)-1) / (ELEMPER))
 #define BV_ELEM_SIZE      8U
-#define RZ_BV_CHUNK_SIZE  (sizeof(unsigned long) * CHAR_BIT)
-#define SIZE_OF_UNSIGNED_LONG sizeof(unsigned long)
+#define RZ_BV_CHUNK_SIZE  (sizeof(ut32) * CHAR_BIT)
+#define SIZE_OF_UT32      sizeof(ut32)
 
 // optimization for reversing 8 bits which uses 32 bits
 // https://graphics.stanford.edu/~seander/bithacks.html#ReverseByteWith32Bits
@@ -203,6 +203,79 @@ RZ_API ut32 rz_bv_copy(RZ_NONNULL const RzBitVector *src, RZ_NONNULL RzBitVector
 }
 
 /**
+ * Get a 32-bit chunk from the specified position in the bit vector.
+ * \param bv RzBitVector, the bit vector from which to extract the chunk
+ * \param chunk_idx ut32, the index of the chunk to retrieve
+ * \return chunk ut32, the extracted 32-bit chunk
+ */
+RZ_API ut32 rz_bv_get_chunk(const RzBitVector *bv, ut32 chunk_idx) {
+	rz_return_val_if_fail(bv, 0); // Ensure the bit vector is not NULL
+
+	// Calculate the starting position for the chunk
+	ut32 chunk_start_pos = chunk_idx * RZ_BV_CHUNK_SIZE;
+	ut32 word_idx = chunk_start_pos / 32; // Identify the starting word for the chunk
+
+	ut32 chunk = 0;
+	ut32 bit_offset = chunk_start_pos % 32; // Offset within the word
+
+	// Extract the 32-bit chunk, considering the word boundary
+	if (bit_offset == 0) {
+		// The chunk is aligned to a 32-bit boundary
+		chunk = bv->data[word_idx];
+	} else {
+		// The chunk spans across two 32-bit words
+		ut32 first_word = bv->data[word_idx];
+		ut32 second_word = bv->data[word_idx + 1];
+
+		// Shift the first word and mask the necessary bits
+		chunk = first_word >> bit_offset;
+
+		// Mask the remaining bits from the second word
+		chunk |= (second_word << (32 - bit_offset));
+	}
+
+	return chunk; // Return the extracted 32-bit chunk
+}
+
+/**
+ * Set a 32-bit chunk at the specified position in the bit vector.
+ * \param bv RzBitVector, the bit vector in which to set the chunk
+ * \param chunk_idx ut32, the index of the chunk to set
+ * \param chunk ut32, the 32-bit chunk to set
+ */
+RZ_API void rz_bv_set_chunk(RzBitVector *bv, ut32 chunk_idx, ut32 chunk) {
+	rz_return_if_fail(bv); // Ensure the bit vector is not NULL
+
+	// Calculate the starting position for the chunk
+	ut32 chunk_start_pos = chunk_idx * RZ_BV_CHUNK_SIZE;
+	ut32 word_idx = chunk_start_pos / 32; // Identify the starting word for the chunk
+
+	ut32 bit_offset = chunk_start_pos % 32; // Offset within the word
+
+	// Set the 32-bit chunk, considering the word boundary
+	if (bit_offset == 0) {
+		// The chunk is aligned to a 32-bit boundary
+		bv->data[word_idx] = chunk;
+	} else {
+		// The chunk spans across two 32-bit words
+		ut32 first_word = bv->data[word_idx];
+		ut32 second_word = bv->data[word_idx + 1];
+
+		// Clear the bits in the current chunk positions
+		first_word &= ~(0xFFFFFFFF >> bit_offset); // Clear the upper bits
+		second_word &= (0xFFFFFFFF >> (32 - bit_offset)); // Clear the lower bits
+
+		// Combine the chunk into the words
+		first_word |= (chunk << bit_offset);
+		second_word |= (chunk >> (32 - bit_offset));
+
+		// Write the words back to the bit vector
+		bv->data[word_idx] = first_word;
+		bv->data[word_idx + 1] = second_word;
+	}
+}
+
+/**
  * Copy n bits from start position of source to start position of dest, return num of copied bits
  * \param src RzBitVector, data source
  * \param src_start_pos ut32, start position in source bitvector of copy
@@ -216,7 +289,7 @@ RZ_API ut32 rz_bv_copy_nbits(RZ_NONNULL const RzBitVector *src, ut32 src_start_p
 	rz_return_val_if_fail(src && dst, 0);
 
 	// Determine the chunk size (word size) dynamically
-	const ut32 RZ_BV_CHUNK_SIZE = SIZE_OF_UNSIGNED_LONG * CHAR_BIT; // Word size in bits
+	const ut32 RZ_BV_CHUNK_SIZE = SIZE_OF_UT32 * CHAR_BIT; // Word size in bits
 	ut32 max_nbit = RZ_MIN((src->len - src_start_pos), (dst->len - dst_start_pos));
 
 	if (max_nbit < nbit) {
@@ -237,25 +310,25 @@ RZ_API ut32 rz_bv_copy_nbits(RZ_NONNULL const RzBitVector *src, ut32 src_start_p
 	// Process aligned chunks
 	while (nbit >= RZ_BV_CHUNK_SIZE) {
 		// Get chunks from the source and destination
-		unsigned long src_chunk = rz_bv_get_chunk(src, src_start_pos / RZ_BV_CHUNK_SIZE);
-		unsigned long dst_chunk = rz_bv_get_chunk(dst, dst_start_pos / RZ_BV_CHUNK_SIZE);
+		ut32 src_chunk = rz_bv_get_chunk(src, src_start_pos / RZ_BV_CHUNK_SIZE);
+		ut32 dst_chunk = rz_bv_get_chunk(dst, dst_start_pos / RZ_BV_CHUNK_SIZE);
 
 		// Create a mask for the bits to copy
-		unsigned long mask = UINT32_MAX;
+		ut32 mask = UT32_MAX;
 		if (nbit < RZ_BV_CHUNK_SIZE) {
 			mask = (1UL << nbit) - 1;
 		}
 
 		// Merge chunks using the optimized approach , reference : https://graphics.stanford.edu/~seander/bithacks.html#MaskedMerge
-		unsigned long result = dst_chunk ^ ((dst_chunk ^ src_chunk) & mask);
+		ut32 result = dst_chunk ^ ((dst_chunk ^ src_chunk) & mask);
 		rz_bv_set_chunk(dst, dst_start_pos / RZ_BV_CHUNK_SIZE, result);
 
 		src_start_pos += RZ_BV_CHUNK_SIZE;
 		dst_start_pos += RZ_BV_CHUNK_SIZE;
-		if (nbit >= RV_BV_CHUNK_SIZE)
-			nbit -= RZ_BV_CHUNK_SIZE;
-		else
+		if (nbit < RV_BV_CHUNK_SIZE) {
 			break;
+		}
+		nbit -= RZ_BV_CHUNK_SIZE;
 	}
 
 	// Handle remaining unaligned suffix bits
@@ -1525,7 +1598,7 @@ RZ_API bool rz_bv_set_range(RZ_NONNULL RzBitVector *bv, ut32 pos_start, ut32 pos
 	}
 
 	// Determine the chunk size dynamically
-	const ut32 RZ_BV_CHUNK_SIZE = SIZE_OF_UNSIGNED_LONG * CHAR_BIT;
+	const ut32 RZ_BV_CHUNK_SIZE = SIZE_OF_UT32 * CHAR_BIT;
 
 	// Handle unaligned prefix bits
 	while (pos_start < pos_end && pos_start % RZ_BV_CHUNK_SIZE != 0) {
@@ -1537,7 +1610,7 @@ RZ_API bool rz_bv_set_range(RZ_NONNULL RzBitVector *bv, ut32 pos_start, ut32 pos
 		ut32 chunk_start = pos_start / RZ_BV_CHUNK_SIZE;
 		ut32 chunk_end = pos_end / RZ_BV_CHUNK_SIZE;
 
-		unsigned long fill_value = b ? ~0UL : 0UL;
+		ut32 fill_value = b ? ~0UL : 0UL;
 
 		for (ut32 i = chunk_start; i < chunk_end; ++i) {
 			rz_bv_set_chunk(bv, i, fill_value);
